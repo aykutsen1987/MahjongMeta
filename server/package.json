@@ -1,0 +1,17 @@
+{
+  "name": "mahjongmeta-server",
+  "version": "1.0.0",
+  "description": "MahjongMeta Game online multiplayer relay backend (Express + WebSocket).",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}
