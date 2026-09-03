@@ -236,6 +236,26 @@ function otherPeerId(room, peerId) {
   return null;
 }
 
+// --- Sohbet mesajı temizleme (korumalı) ------------------------------------
+// İstemci (main.js) zaten mesajı 60 karaktere kısıtlıyor (maxlength="60" +
+// .slice(0, 60)), ANCAK istemci tarafı sınırlar değiştirilmiş/atlanmış bir
+// istemciyle (ör. modifiye APK, elle WebSocket mesajı) kolayca aşılabilir.
+// Bu yüzden sunucu, kendisine gelen HER 'chat' mesajını bağımsız olarak
+// yeniden temizler: satır sonu / kontrol karakterleri kaldırılır, baş-son
+// boşluk kırpılır ve nihai uzunluk yine 60 karakterle sınırlanır. Böylece
+// "korumalı" (protected) davranış yalnızca istemciye değil, sunucuya da
+// dayanır.
+const CHAT_MAX_LENGTH = 60;
+
+function sanitizeChatText(raw) {
+  const text = String(raw || "")
+    // Kontrol karakterlerini (satır sonu, tab, vb.) tek boşlukla değiştir;
+    // böylece çok satırlı/gizli karakter içeren mesajlar tahtayı bozamaz.
+    .replace(/[\u0000-\u001F\u007F]+/g, " ")
+    .trim();
+  return text.slice(0, CHAT_MAX_LENGTH);
+}
+
 function leaveRoom(ws) {
   removeFromQueue(ws);
   const room = ws.room;
@@ -352,11 +372,22 @@ wss.on("connection", (ws) => {
       case "chat": {
         const room = ws.room;
         if (!room) return;
+
+        // Sohbet mesajı boşsa (temizlemeden sonra) hiçbir şey gönderme;
+        // karşı tarafta boş bir mesaj balonu belirmesin.
+        if (msg.type === "chat") {
+          const cleanText = sanitizeChatText(msg.text);
+          if (!cleanText) return;
+          const other = otherPeerId(room, ws.peerId);
+          if (other) {
+            send(room.players.get(other), { type: "chat", by: ws.peerId, text: cleanText });
+          }
+          return;
+        }
+
         const other = otherPeerId(room, ws.peerId);
         if (other) {
-          const out = { type: msg.type, by: ws.peerId };
-          if (msg.type === "chat") out.text = String(msg.text || "").slice(0, 200);
-          send(room.players.get(other), out);
+          send(room.players.get(other), { type: msg.type, by: ws.peerId });
         }
         return;
       }
